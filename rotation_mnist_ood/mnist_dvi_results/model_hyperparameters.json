@@ -1,0 +1,35 @@
+{
+  "x_dim": 784,
+  "y_dim": 10,
+  "hidden_dims": [
+    512,
+    512
+  ],
+  "nonlinearity": "relu",
+  "method": "bayes",
+  "prior_type": [
+    "gaussian",
+    "he",
+    "he"
+  ],
+  "n_epochs": 50,
+  "early_stop_patience": 10,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "lambda": 1.0,
+  "warmup_updates": {
+    "lambda": 14000.0
+  },
+  "anneal_updates": {
+    "lambda": 1000.0
+  },
+  "optimizer": "adam",
+  "gradient_clip": 0.1,
+  "data_fraction": 1.0,
+  "sections_to_run": [
+    "train",
+    "valid",
+    "test"
+  ],
+  "dataset_size": 50000
+}
