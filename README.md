@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Published in TMLR](https://img.shields.io/badge/Published%20in-TMLR%20(06%2F2025)-blue)](https://openreview.net/forum?id=lyDRBhUjhv)
 
-Official code for **"A Stochastic Polynomial Expansion for Uncertainty Propagation through Networks"**, published in Transactions on Machine Learning Research (TMLR), 06/2025.
+Official code for **["A Stochastic Polynomial Expansion for Uncertainty Propagation through Networks"](https://openreview.net/forum?id=lyDRBhUjhv)**, published in Transactions on Machine Learning Research (TMLR), 06/2025.
 
 **Authors:** Songhan Zhang, ShiNung Ching (Washington University in St. Louis)
 
@@ -149,4 +149,5 @@ compare_PTPE_JL_werrorbar
   doi={10.1016/j.neunet.2025.107376}
 }
 ```
+
 
