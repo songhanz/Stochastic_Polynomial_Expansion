@@ -56,15 +56,15 @@ When taking only the first-order term (S=1), this expansion reduces to stochasti
 
 PTPE provides analytical solutions for **seven** commonly used activation functions:
 
-| Activation | Key Technique | Variance Parameter σ́² |
-|---|---|---|
-| **Tanh** | Approximated via linear combination of error functions | 1/(2γⱼ²) |
-| **Sigmoid** | Approximated via linear combination of Gaussian CDFs | 1/(2γⱼ²) |
-| **Softplus** | Derived from sigmoid (derivative of softplus = sigmoid) | 1/(2γⱼ²β²) |
-| **ReLU** | Limiting case of softplus as β → ∞ | 0 |
-| **LeakyReLU** | Superposition of two ReLU functions | 0 |
-| **GELU** | Product of input and Gaussian CDF; Hermite recurrence | 1 |
-| **SiLU (Swish)** | Product of input and sigmoid; combines sigmoid + GELU | 1/(2γⱼ²) |
+| Activation | Key Technique |
+|---|---|
+| **Tanh** | Approximated via linear combination of error functions |
+| **Sigmoid** | Approximated via linear combination of Gaussian CDFs |
+| **Softplus** | Derived from sigmoid (derivative of softplus = sigmoid) |
+| **ReLU** | Limiting case of softplus as β → ∞ |
+| **LeakyReLU** | Superposition of two ReLU functions |
+| **GELU** | Product of input and Gaussian CDF; Hermite recurrence |
+| **SiLU (Swish)** | Product of input and sigmoid; combines sigmoid + GELU |
 
 All pseudo-Taylor coefficients Aₛ can be expressed in terms of three fundamental operations — Gaussian likelihood **L**, cumulative likelihood **F**, and an excess integral **I** — which are computationally cheap and fully vectorized.
 
@@ -134,21 +134,39 @@ The repository uses **Python** (56.2%) for the core neural network experiments, 
 
 ### Prerequisites
 
-**Python environment:**
-- Python 3.8+
-- PyTorch (1.10+ recommended)
-- torchvision
-- NumPy, SciPy, Matplotlib
+**For DVI+PTPE experiments (TensorFlow-based):**
+- Python 3.6+
+- TensorFlow 1.15 (with `tensorflow.compat.v1`)
+- TensorFlow Probability 0.5.0
+- scikit-learn, pandas, numpy, scipy, matplotlib, tqdm, openpyxl, xlrd
 
-**MATLAB** (optional, for scaling factor optimization):
-- MATLAB R2021a+ with Optimization Toolbox (for `fmincon`)
+A full list of pinned dependencies is provided in `DVI+PTPE/requirements.txt`.
+
+**For VAE+PTPE experiments (PyTorch-based):**
+- Python 3.8+
+- PyTorch 1.10+
+- torchvision, numpy, scipy, matplotlib, pandas
+
+**For CIFAR-10 experiments (MATLAB):**
+- MATLAB R2021a+ with Deep Learning Toolbox and GPU support
+- Pretrained ResNet `.mat` files (see instructions below)
 
 ### Installation
 
 ```bash
 git clone https://github.com/songhanz/Stochastic_Polynomial_Expansion.git
 cd Stochastic_Polynomial_Expansion
-pip install torch torchvision numpy scipy matplotlib
+```
+
+For the DVI+PTPE experiments:
+```bash
+cd DVI+PTPE
+pip install -r requirements.txt
+```
+
+For the VAE+PTPE experiments:
+```bash
+pip install torch torchvision numpy scipy matplotlib pandas
 ```
 
 ---
@@ -159,72 +177,192 @@ pip install torch torchvision numpy scipy matplotlib
 
 **Goal:** Benchmark PTPE accuracy for propagating Gaussian noise through pretrained ResNets.
 
-**Setup:** Nine ResNets with three depths (13, 33, 65 layers) and three activations (Tanh, ReLU, GELU) are trained on CIFAR-10. Input images are corrupted with additive Gaussian noise at four variance levels ([1, 10, 100, 1000] on the RGB scale [0, 255]). The PTPE-predicted output distribution is compared against ground truth obtained via 10⁷ Monte Carlo samples.
+**Setup:** Nine ResNets with three depths (ResNet-13, ResNet-33, ResNet-65, specified as stack configurations `[3,2,1]`, `[3,10,3]`, `[4,25,3]`) and three activations (Tanh, ReLU, GELU) are trained on CIFAR-10. Input images are corrupted with additive i.i.d. Gaussian noise at four variance levels ([1, 10, 100, 1000] on the RGB scale [0, 255]).
 
-**Metrics:** Euclidean distance of means (L2 norm), Frobenius norm of covariance residuals, 2-Wasserstein distance between predicted and reference Gaussian distributions.
+**Requires:** MATLAB with Deep Learning Toolbox and a GPU. Pretrained ResNet models must be saved as `.mat` files in a `models/` directory (e.g., `resnet321_tanh.mat`). Convolution weights must be pre-flattened into matrix form.
 
-**Key Finding:** Up to 3rd-order PTPE typically outperforms Jacobian linearization and stochastic linearization by a large margin, especially at moderate-to-high input variance.
-
-```bash
-cd cifar10experiment
-# 1. Train ResNets on CIFAR-10 (or use provided pretrained weights)
-# 2. Run PTPE propagation at different orders and input variances
-# 3. Compare against 10⁷ MC sampling ground truth
+**Step 1 — Flatten convolution weights** (run once per model):
+```matlab
+% In MATLAB:
+flatten_resnet   % Loads each ResNet .mat file and saves reshaped convolution weights
+                 % Output: convW/<netname><nonlin>_convW.mat
 ```
+
+**Step 2 — Compute MC ground truth** (10⁶ samples per configuration):
+```matlab
+% Run one script per activation:
+true_output_dist_Tanh   % MC sampling through Tanh ResNets at all depths & variances
+true_output_dist_ReLU   % MC sampling through ReLU ResNets
+true_output_dist_GELU   % MC sampling through GELU ResNets
+```
+
+**Step 3 — Run PTPE estimation** (1st, 2nd, 3rd order):
+```matlab
+% Run one script per activation:
+est_output_PTPE_3orders_resnet_tanh   % PTPE propagation through Tanh ResNets
+est_output_PTPE_3orders_resnet_relu   % PTPE propagation through ReLU ResNets
+est_output_PTPE_3orders_resnet_gelu   % PTPE propagation through GELU ResNets
+
+% Optional: test with 8 scaling factors instead of 4
+est_output_PTPE_3orders_resnet_tanh_8gamma
+```
+
+**Step 4 — Generate comparison figures** (Figures 3, 9, 10):
+```matlab
+compare_PTPE_JL              % Side-by-side comparison plots
+compare_PTPE_JL_werrorbar    % Same, with error bars from repeated trials
+```
+
+**Key files:**
+| File | Purpose |
+|---|---|
+| `flatten_resnet.m` | Reshapes convolution weights into matrix form for PTPE |
+| `true_output_dist_*.m` | Monte Carlo ground truth (10⁶ samples) |
+| `est_output_PTPE_3orders_resnet_*.m` | PTPE estimation at orders 1–3 |
+| `compare_PTPE_JL.m` | Generates comparison figures (W2, L2, Frobenius) |
+| `nearestSPD.m` | Utility: projects matrices to nearest symmetric positive definite |
+| `hex2rgb.m` | Utility: color conversion for plots |
 
 ### 2. Deterministic Variational Inference (`DVI+PTPE/`)
 
-**Goal:** Replace the forward-passing functions in Deterministic Variational Inference (DVI) with PTPE, enabling non-piecewise-linear activations (Tanh, GELU) for BNN training. Previous DVI work (Wu et al., 2019) only supported piecewise-linear activations like ReLU.
+**Goal:** Replace the moment propagation in DVI (Wu et al., 2019) with PTPE, enabling non-piecewise-linear activations (Tanh, GELU) for Bayesian neural network training.
 
-**Setup:** Regression experiments on eight UCI datasets: Concrete Strength, Energy Efficiency, Kin8nm, Naval Propulsion, Power Plant, Protein Structure, Wine Quality, and Yacht Hydrodynamics. MLPs with up to four layers of 50 hidden units (100 for Protein Structure). 10% held-out test data with 20 random splits.
+**Setup:** Regression on eight UCI datasets (Concrete, Energy, Kin8nm, Naval, Power, Protein, Wine, Yacht). MLPs with up to 4 hidden layers of 50 units (100 for Protein Structure). Trains for 2000 epochs with early stopping (patience=20). Uses 10% test split with 20 random seeds. Datasets are downloaded automatically from UCI/OpenML.
 
-**Baselines:** MCVI, Probabilistic Backpropagation (PBP), Dropout, Deep Ensembles, DVI (ReLU only), Linearized Laplace.
-
-**Key Finding:** PTPE-DVI achieves competitive or superior RMSE and log-likelihood across datasets, successfully extending DVI to smooth activations.
-
+**Run experiments** (one script per activation):
 ```bash
 cd DVI+PTPE
-# Run UCI regression across 8 datasets with 20 random train/test splits
-# Reports RMSE and average log-likelihood
+python UCI_relu.py    # DVI+PTPE with ReLU activation
+python UCI_gelu.py    # DVI+PTPE with GELU activation
+python UCI_tanh.py    # DVI+PTPE with Tanh activation
 ```
 
-### 3. Categorical Classification (`DVI+PTPE_categorical/`)
+Each script iterates over all 8 datasets and saves results to `UCI_results_sgd/<dataset>_<activation>_<layers>layer_adapter/`. Per-run checkpoints and training histories are stored in numbered subdirectories.
 
-**Goal:** Evaluate PTPE-based BNNs on classification tasks with MNIST digit classification.
+**Print aggregated results** (Tables 2 & 3):
+```bash
+python print_result.py    # Reads all result folders and prints RMSE ± stderr
+                          # and log-likelihood ± stderr for each dataset/activation/depth
+```
 
+**Interactive exploration:**
+
+Open `ToyData.ipynb` in Jupyter to visualize PTPE-DVI on a 1D toy regression problem.
+
+**Key files:**
+| File | Purpose |
+|---|---|
+| `UCI_relu.py`, `UCI_gelu.py`, `UCI_tanh.py` | Main training scripts (one per activation) |
+| `print_result.py` | Aggregates and prints test RMSE & log-likelihood |
+| `ToyData.ipynb` | Interactive 1D toy data demo |
+| `bayes_layers.py` | PTPE moment propagation for ReLU, GELU, Tanh |
+| `bayes_models.py` | BNN model definitions (MLP, AdaptedMLP) |
+| `gaussian_variables.py` | Gaussian distribution utilities |
+| `utils.py` | Training loop, optimizer, data utilities |
+
+### 3. Categorical Classification & OOD Preparation (`DVI+PTPE_categorical/`)
+
+**Goal:** Train PTPE-based BNNs on MNIST digit classification and generate predictions for OOD experiments.
+
+**Step 1 — Train DVI+PTPE on MNIST:**
 ```bash
 cd DVI+PTPE_categorical
-# Train BNN with PTPE on MNIST classification
+python mnist.py                # Trains BNN with PTPE on MNIST
+                               # Saves model to mnist_dvi_model/
+                               # Saves training history to mnist_dvi_results/
 ```
+
+**Step 2 — (Optional) Hyperparameter search and cyclic annealing:**
+```bash
+python mnist_search_lambda.py  # Grid search over KL weighting parameter λ
+python mnist_cyclic_anneal.py  # Train with cyclic KL annealing schedule
+```
+
+**Step 3 — Run OOD evaluation with the trained DVI model:**
+```bash
+python rotation_ood.py         # Evaluates DVI+PTPE on rotated MNIST & FashionMNIST OOD
+                               # Saves results as .pkl files in mnist_dvi_results/
+```
+
+**Key files:**
+| File | Purpose |
+|---|---|
+| `mnist.py` | Main MNIST training script for DVI+PTPE |
+| `mnist_search_lambda.py` | Hyperparameter search over λ |
+| `mnist_cyclic_anneal.py` | Cyclic KL annealing variant |
+| `rotation_ood.py` | Generates DVI rotation/OOD prediction results (.pkl) |
 
 ### 4. VAE with PTPE Decoder (`VAE+PTPE/`)
 
 **Goal:** Replace Monte Carlo sampling in the VAE decoder with deterministic PTPE moment propagation.
 
-**Setup:** VAE trained on MNIST with latent dimensions of 2, 5, 10, and 20. The PTPE-VAE propagates only diagonal covariance (O(n) complexity) while keeping the architecture and trainable parameters identical to the vanilla VAE.
+**Setup:** VAE trained on MNIST with latent dimensions of 2, 5, 10, and 20. The script trains both a vanilla VAE and a PTPE-enabled VAE (`VAE_EP`) side by side for 200 epochs, then saves ELBO curves as CSV and PNG. Architecture: encoder and decoder with 500 hidden units, batch size 100.
 
-**Key Finding:** The PTPE-enabled VAE achieves higher ELBO and improved reconstruction accuracy compared to the vanilla VAE across all tested latent dimensions.
+**Note:** MNIST data must be available at `./data/MNIST/`. Set `download=True` in `train_mnist.py` on first run.
 
+**Step 1 — Train both vanilla VAE and PTPE-VAE:**
 ```bash
 cd VAE+PTPE
-# Train PTPE-VAE and vanilla VAE on MNIST
-# Compare ELBO and reconstruction loss across latent dimensions (2, 5, 10, 20)
+python train_mnist.py    # Trains VAE (vanilla) and VAE_EP (PTPE) for each latent dim
+                         # Outputs:
+                         #   trained_parameters/vanilla_v2/mnist_zdim{N}.pkl
+                         #   trained_parameters/EP_v2/mnist_zdim{N}.pkl
+                         #   elbo_data_{N}D_vanilla.csv   (ELBO curves)
+                         #   elbocurve-{N}D.png           (ELBO plots)
 ```
+
+To train across all latent dimensions, edit the `for latent_size in [2]:` loop in `train_mnist.py` to `[2, 5, 10, 20]`.
+
+**Step 2 — Evaluate reconstruction error on test set:**
+```bash
+python reconst_err_vanilla.py   # Reconstruction MSE for vanilla VAE (all latent dims)
+python reconst_err_PTPE.py      # Reconstruction MSE for PTPE-VAE (all latent dims)
+```
+
+**Step 3 — Generate paper figures** (Figure 5):
+```matlab
+% In MATLAB:
+make_figures    % Reads the CSV files and produces publication-quality ELBO plots
+```
+
+**Key files:**
+| File | Purpose |
+|---|---|
+| `train_mnist.py` | Trains vanilla VAE and PTPE-VAE side by side |
+| `reconst_err_vanilla.py` | Evaluates reconstruction error for vanilla VAE |
+| `reconst_err_PTPE.py` | Evaluates reconstruction error for PTPE-VAE |
+| `models.py` | Model definitions: `VAE`, `VAE_EP`, `VAE_EP_fullcov` |
+| `make_figures.m` | MATLAB script for publication-quality ELBO plots |
 
 ### 5. Out-of-Distribution Detection (`rotation_mnist_ood/`)
 
-**Goal:** Test how DVI+PTPE models handle distribution shift and OOD inputs.
+**Goal:** Compare DVI+PTPE against Vanilla, Dropout, and Ensemble models on distribution-shifted and OOD data.
 
-**Setup:** Models trained on MNIST are evaluated on progressively rotated MNIST images (0°–180°) and on FashionMNIST as entirely OOD data. Evaluated using Brier Score, Log Likelihood, confidence calibration, and entropy distributions.
+**Prerequisites:** You must first train the DVI+PTPE model on MNIST and generate its prediction results:
+```bash
+# First, run Steps 1 and 3 in DVI+PTPE_categorical/ above:
+cd DVI+PTPE_categorical
+python mnist.py          # Train the DVI+PTPE model
+python rotation_ood.py   # Generate DVI rotation & OOD predictions (.pkl files)
 
-**Key Finding:** DVI+PTPE achieves the highest accuracy on shifted images and is the least overconfident model among all tested approaches (Vanilla, Dropout, Ensemble), while maintaining comparable OOD detection capability.
+# Then copy the results folder into rotation_mnist_ood/:
+cp -r mnist_dvi_results/ ../rotation_mnist_ood/mnist_dvi_results/
+```
 
+**Run the full comparison:**
 ```bash
 cd rotation_mnist_ood
-# Evaluate DVI+PTPE vs. Vanilla, Dropout, Ensemble on:
-#   - Rotated MNIST (Brier Score, Log Likelihood)
-#   - FashionMNIST OOD (Entropy, Confidence)
+python main.py
 ```
+
+This script will:
+1. Train (or load previously saved) Vanilla, Dropout (p=0.5), and Ensemble (10 models) baselines on MNIST
+2. Evaluate all models on rotated MNIST images at 12 angles (0°, 15°, 30°, ... 180°)
+3. Evaluate all models on FashionMNIST as OOD data
+4. Load the DVI+PTPE results from `mnist_dvi_results/`
+5. Generate Figure 4: a 2×3 panel with Brier Score, Log Likelihood, Accuracy vs. Confidence, Count vs. Confidence, Entropy Distribution, and OOD Confidence
+
+**Output:** `results/uncertainty_estimation_results.pdf` and `.png`
 
 ---
 
@@ -361,3 +499,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ---
 
+## Acknowledgement
+
+This research was, in part, funded by the U.S. Government (award no. HR00112290113). The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official policies, either expressed or implied, of the U.S. Government.
